@@ -1,69 +1,60 @@
-$(function () { // Same as document.addEventListener("DOMContentLoaded"...
+// Ensure $dc namespace exists
+var $dc = $dc || {};
 
-  // STEP 0: Make an AJAX call to request the list of categories
-  var allCategoriesUrl = "https://davids-restaurant.herokuapp.com/categories.json";
+(function (global) {
+  var dc = global.$dc;
+
   var homeHtmlUrl = "snippets/home-snippet.html";
+  var categoriesJsonUrl = "data/categories.json";
+  var menuItemsJsonUrl = "data/menu_items.json?category={{short_name}}";
 
-  $ajaxUtils.sendGetRequest(
-    allCategoriesUrl,
-    buildAndShowHomeHTML, // callback
-    true // isJson
-  );
-});
+  // Convenience AJAX function for JSON responses
+  function sendGetJson(url, callback) {
+    var request = new XMLHttpRequest();
+    request.open("GET", url);
+    request.onload = function () {
+      if (request.status === 200) {
+        callback(JSON.parse(request.responseText));
+      } else {
+        console.error("Failed to load JSON from", url, request.status);
+      }
+    };
+    request.send();
+  }
 
-/**
- * Builds HTML for the home page based on categories array
- */
-function buildAndShowHomeHTML (categories) {
-  var homeHtmlUrl = "snippets/home-snippet.html";
+  var insertHtml = function (selector, html) {
+    document.querySelector(selector).innerHTML = html;
+  };
 
-  // Load home snippet page
-  $ajaxUtils.sendGetRequest(
-    homeHtmlUrl,
-    function (homeHtml) {
+  var insertProperty = function (string, propName, propValue) {
+    return string.replace(new RegExp("{{" + propName + "}}", "g"), propValue);
+  };
 
-      // STEP 1: Choose a random category
-      var randomCategory = chooseRandomCategory(categories);
+  var chooseRandomCategory = function (categories) {
+    var randomIndex = Math.floor(Math.random() * categories.length);
+    return categories[randomIndex];
+  };
 
-      // STEP 2: Get its short_name
-      var shortName = randomCategory.short_name;
+  dc.loadMenuCategories = function () {
+    sendGetJson(categoriesJsonUrl, function (categories) {
+      sendGetJson(homeHtmlUrl, function (homeHtml) {
+        var randomCategory = chooseRandomCategory(categories);
+        var shortName = randomCategory.short_name;
+        var newHtml = insertProperty(homeHtml, "randomCategoryShortName", "'" + shortName + "'");
+        insertHtml("#main-content", newHtml);
+      });
+    });
+  };
 
-      // STEP 3: Replace {{randomCategoryShortName}} in HTML
-      // We wrap shortName in quotes so onclick="$dc.loadMenuItems('XYZ');" works correctly
-      homeHtml = insertProperty(homeHtml, "randomCategoryShortName", "'" + shortName + "'");
+  dc.loadMenuItems = function (categoryShort) {
+    var menuItemsUrl = insertProperty(menuItemsJsonUrl, "short_name", categoryShort);
+    sendGetJson(menuItemsUrl, function (menuItemsData) {
+      // Here you'd implement rendering menu items with snippets or inline HTML
+      insertHtml("#main-content", "<pre>" + JSON.stringify(menuItemsData, null, 2) + "</pre>");
+    });
+  };
 
-      // STEP 4: Insert the processed HTML into main-content
-      insertHtml("#main-content", homeHtml);
-    },
-    false // isJson
-  );
-}
+  // Load home by default
+  dc.loadMenuCategories();
 
-/**
- * Chooses a random category from the categories array
- */
-function chooseRandomCategory (categories) {
-  var randomIndex = Math.floor(Math.random() * categories.length);
-  return categories[randomIndex];
-}
-
-/**************************************
- * HELPER FUNCTIONS (provided in starter)
- **************************************/
-
-/**
- * Inserts html into the element with selector `selector`
- */
-function insertHtml(selector, html) {
-  var targetElem = document.querySelector(selector);
-  targetElem.innerHTML = html;
-}
-
-/**
- * Replaces all instances of {{propName}} with propValue
- */
-function insertProperty(string, propName, propValue) {
-  var propToReplace = "{{" + propName + "}}";
-  string = string.replace(new RegExp(propToReplace, "g"), propValue);
-  return string;
-}
+})(window);
